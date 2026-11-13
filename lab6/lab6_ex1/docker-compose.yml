@@ -1,44 +1,59 @@
-services:
+services:                          # the containers that make up the application
+
+  # ---------- 1. Training API: trains the model and saves it to a file ----------
   training_api:
     build:
-      context: ../../lab2/training-api
-    container_name: training_api
+      context: ../../lab2/training-api   # build the image from the Dockerfile in this folder (lab 2 source code)
+    container_name: training_api         # fixed container name (used by `docker logs training_api`)
     environment:
-      - MODEL_REPO=/usr/src/myapp/models
+      - MODEL_REPO=/usr/src/myapp/models # tells the code WHERE (inside the container) to save the trained model
     ports:
-      - "5002:5000"
+      - "5002:5000"                      # host:container. Browse to VM_IP:5002; the app listens on 5000 inside
     networks:
-      - network-b
+      - network-b                        # connected only to network-b (shared with prediction_api)
     volumes:
       - "/home/indika_kuma/models:/usr/src/myapp/models"
+                                         # bind mount: VM folder : container folder.
+                                         # The model file written here lands on the VM's disk
+                                         # CHANGE the left part to your own home folder
+
+  # ---------- 2. Prediction API: loads the saved model and answers prediction requests ----------
   prediction_api:
     build:
       context: ../../lab2/prediction-api
     container_name: prediction_api
     depends_on:
-      - training_api
+      - training_api                     # start after training_api (start ORDER only, not "ready")
     ports:
-      - "5001:5000"
+      - "5001:5000"                      # VM_IP:5001 -> prediction API
     networks:
-      - network-a
-      - network-b
+      - network-a                        # talks to the UI through network-a
+      - network-b                        # shares network-b with the training API
     environment:
-      - MODEL_REPO=/usr/src/myapp/models
+      - MODEL_REPO=/usr/src/myapp/models # where to LOOK for the model file
     volumes:
       - "/home/indika_kuma/models:/usr/src/myapp/models"
+                                         # SAME VM folder as training_api, so it reads the model
+                                         # that the training API wrote (this is the "model-repo" in the slide)
+
+  # ---------- 3. Prediction UI: the web page users interact with ----------
   prediction_ui:
     build:
       context: ../../lab2/prediction-ui
     container_name: prediction_ui
     depends_on:
-      - prediction_api
+      - prediction_api                   # start after prediction_api
     ports:
-      - "5000:5000"
+      - "5000:5000"                      # open VM_IP:5000/checkdiabetes in your browser
     networks:
-      - network-a
+      - network-a                        # only on network-a, so it can reach prediction_api
+                                         # but NOT training_api
     environment:
       - PREDICTOR_API=http://prediction_api:5000/diabetes_predictor
+                                         # address the UI calls. "prediction_api" is the service name,
+                                         # resolved by Docker's internal DNS; 5000 is the CONTAINER port
+                                         # (not the host port 5001)
 
-networks:
-  network-a:
-  network-b:
+networks:                                # private virtual networks created by Compose
+  network-a:                             # UI <-> prediction API
+  network-b:                             # training API <-> prediction API
