@@ -35,6 +35,10 @@ services:                          # the containers that make up the application
       - "/home/indika_kuma/models:/usr/src/myapp/models"
                                          # SAME VM folder as training_api, so it reads the model
                                          # that the training API wrote (this is the "model-repo" in the slide)
+                                         
+#The environment variable is only a piece of text: /usr/src/myapp/models. It stores nothing. It tells the code where to look.
+#The volume is where the model file actually lives: on the VM’s disk, in /home/indika_kuma/models.
+#The container doesn’t keep its own copy. Its folder /usr/src/myapp/models is just a doorway to the VM folder. The app reads and writes through that doorway as if it were an ordinary local folder, without knowing it’s a volume.
 
   # ---------- 3. Prediction UI: the web page users interact with ----------
   prediction_ui:
