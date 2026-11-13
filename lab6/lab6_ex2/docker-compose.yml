@@ -1,16 +1,35 @@
-services:
+services:                              # two containers: the entry point (nginx) and the app
+
+  # ---------- 1. nginx: the reverse proxy, the only part users talk to ----------
   nginx-proxy:
-    build: nginx
-    container_name: nginx-proxy
-    restart: always
+    build: nginx                       # build the image from ./nginx/Dockerfile
+                                       # (short for build: context: nginx).
+                                       # That Dockerfile copies nginx/conf into the image
+                                       # as nginx's config file
+    container_name: nginx-proxy        # fixed name (used by `docker logs nginx-proxy`)
+    restart: always                    # restart automatically if it stops or the VM reboots
     ports:
-      - "8080:8080"
+      - "8080:8080"                    # host:container. Browse to VM_IP:8080.
+                                       # nginx listens on 8080 inside (set in nginx/conf)
     depends_on:
-      - diabetes-app
+      - diabetes-app                   # start the app first (start ORDER only, not "ready")
+
+  # ---------- 2. diabetes-app: Flask app (UI + prediction + model) run by gunicorn ----------
   diabetes-app:
-    build: prediction-ui-embedded
+    build: prediction-ui-embedded      # build from ./prediction-ui-embedded/Dockerfile.
+                                       # The image contains the Flask code AND model.pkl
+                                       # (copied in with COPY . .), so no volume is needed
     container_name: diabetes-app
-    restart: always
-    ports: 
-      - '8000:8000'
+    restart: always                    # restart automatically if it crashes
+    ports:
+      - '8000:8000'                    # NOT USED: nothing listens on 8000 (gunicorn uses 5000).
+                                       # nginx reaches the app over the internal network,
+                                       # so this line could be removed
     command: gunicorn -w 3 -t 60 -b 0.0.0.0:5000 app:app
+                                       # overrides the Dockerfile's CMD ["python3","app.py"].
+                                       # gunicorn = the production (WSGI) server that runs Flask:
+                                       #   -w 3             -> 3 worker processes (handle requests in parallel)
+                                       #   -t 60            -> a request gets 60 s before it is treated as stuck
+                                       #   -b 0.0.0.0:5000  -> listen on port 5000 on all interfaces,
+                                       #                       so nginx (another container) can connect
+                                       #   app:app          -> in file app.py, use the object named "app"
